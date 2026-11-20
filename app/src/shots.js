@@ -1,26 +1,21 @@
-// Fixed scenes for screenshots: ?shot=editor shows the app with photos loaded;
-// ?shot=cover shows the cover alone, full-viewport. window.__shotReady is set
-// once the scene is painted. Query params pick the scene: layout, grade, title,
-// subtitle, size.
-export async function runShot(shot, query, api) {
-  const { loadSamples, state, redraw, setStatus, syncControls } = api;
-  if (shot === 'cover') document.body.classList.add('shot-cover');
-  if (query.get('layout')) state.layout = query.get('layout');
-  if (query.get('grade')) state.grade = query.get('grade');
-  if (query.get('title')) state.title = query.get('title');
-  if (query.get('subtitle')) state.subtitle = query.get('subtitle');
-  if (query.get('size')) state.size = query.get('size');
-  if (query.get('badge') === 'off') state.showBadge = false;
-  if (query.get('badge') === 'on') state.showBadge = true;
-  if (syncControls) syncControls();
-  try {
-    await Promise.race([
-      Promise.all([document.fonts.load('80px Anton'), document.fonts.load('32px Pacifico')]),
-      new Promise((r) => setTimeout(r, 2500)),
-    ]);
-  } catch { /* fall back to system fonts */ }
-  await loadSamples();
-  redraw();
-  setStatus('Shot scene ready.');
-  requestAnimationFrame(() => requestAnimationFrame(() => { window.__shotReady = true; }));
+// Vice Press — screenshot scenes: ?shot=editor|cover plus layout, grade,
+// title, subtitle, size and badge parameters. The editor reads these on boot
+// (see main.js); this module only parses the query string.
+
+export function shotParams() {
+  const q = new URLSearchParams(window.location.search);
+  const out = { mode: q.get('shot') || 'editor' };
+  const layout = q.get('layout');
+  if (layout) out.layout = layout;
+  const grade = q.get('grade');
+  if (grade) out.grade = grade;
+  const title = q.get('title');
+  if (title) out.title = title;
+  const subtitle = q.get('subtitle');
+  if (subtitle !== null) out.subtitle = subtitle;
+  const size = q.get('size');
+  if (size) out.size = size;
+  const badge = q.get('badge');
+  if (badge) out.badge = badge;
+  return out;
 }
