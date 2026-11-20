@@ -39,6 +39,7 @@ const state = {
 let undoStack = [];
 let redoStack = [];
 
+/** A JSON snapshot of everything undo needs to restore: words, choices, crops. */
 function snapshot() {
   return JSON.stringify({
     layout: state.layout, grade: state.grade, title: state.title,
@@ -261,6 +262,25 @@ $('redo').addEventListener('click', async () => {
 });
 $('exportOne').addEventListener('click', () => exportOne(state.size));
 $('exportAll').addEventListener('click', exportAll);
+
+// Keyboard undo/redo: Ctrl/Cmd+Z to undo, Ctrl/Cmd+Shift+Z (or Ctrl+Y) to redo.
+document.addEventListener('keydown', async (e) => {
+  const mod = e.ctrlKey || e.metaKey;
+  if (!mod || e.target.matches('input, textarea')) return;
+  if (e.key.toLowerCase() === 'z' && !e.shiftKey) {
+    e.preventDefault();
+    if (!undoStack.length) return;
+    redoStack.push(snapshot());
+    await restore(undoStack.pop());
+    syncUndoButtons();
+  } else if ((e.key.toLowerCase() === 'y') || (e.key.toLowerCase() === 'z' && e.shiftKey)) {
+    e.preventDefault();
+    if (!redoStack.length) return;
+    undoStack.push(snapshot());
+    await restore(redoStack.pop());
+    syncUndoButtons();
+  }
+});
 
 // Drag a panel to pan its photo; click a panel to select its slot.
 let drag = null;

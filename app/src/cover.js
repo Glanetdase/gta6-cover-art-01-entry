@@ -1,6 +1,6 @@
 // Vice Press cover engine: draws a multi-panel GTA-style poster onto any 2D canvas.
-// Everything is deterministic: grain comes from a seeded generator, never Math.random,
-// so the same state always exports the same PNG bytes.
+// Fully deterministic — the grain comes from a seeded generator, never Math.random,
+// so the same state always exports byte-identical PNGs.
 
 export const LAYOUTS = [
   { id: 'hero3', label: 'Hero + 3' },
@@ -10,6 +10,8 @@ export const LAYOUTS = [
   { id: 'tilt', label: 'Tilted snaps' },
 ];
 
+// Each grade is a gradient map: shadows -> mids -> highlights, blended over the
+// photo at `strength`. `dot` is the swatch colour shown in the editor picker.
 export const GRADES = [
   { id: 'sunset', label: 'Sunset', dot: '#ff7a3d', shadow: [38, 12, 54], mid: [255, 110, 60], high: [255, 214, 130], strength: 0.62 },
   { id: 'neon', label: 'Neon', dot: '#ff2e88', shadow: [10, 8, 44], mid: [255, 46, 136], high: [120, 230, 255], strength: 0.66 },
@@ -26,33 +28,51 @@ export const SIZES = [
 
 export const SAMPLES = ['boulevard.jpg', 'rooftop.jpg', 'neon.jpg', 'pier.jpg'];
 
-/** Panel geometry for a layout: rects in pixels plus which photo slot each panel shows. */
+/** Seeded pseudo-random generator (mulberry32): identical grain on every render. */
+export function seededRandom(seed) {
+  let a = seed >>> 0;
+  return function next() {
+    a |= 0; a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/**
+ * Panel geometry for a layout at W x H.
+ * Each panel is a rect plus the photo-slot index it shows and an optional tilt
+ * (radians). The title band takes the bottom 18% unless the layout is `full`.
+ */
 export function layoutPanels(layout, W, H) {
   const g = Math.max(4, Math.round(W * 0.008));
   const band = layout === 'full' ? 0 : Math.round(H * 0.18);
   const areaH = H - band;
-  const full = { x: g, y: g, w: W - 2 * g, h: areaH - 2 * g };
+  const lastX = (x) => W - g - x; // right edge of the panel starting at x
   switch (layout) {
     case 'hero3': {
       const heroH = Math.round((areaH - 3 * g) * 0.58);
       const rowY = g + heroH + g;
       const rowH = areaH - rowY - g;
       const cellW = Math.round((W - 2 * g - 2 * g) / 3);
+      const x1 = g, x2 = g + cellW + g, x3 = g + 2 * (cellW + g);
       return [
-        { ...full, h: heroH, photo: 0, tilt: 0 },
-        { x: g, y: rowY, w: cellW, h: rowH, photo: 1, tilt: 0 },
-        { x: g + cellW + g, y: rowY, w: cellW, h: rowH, photo: 2, tilt: 0 },
-        { x: g + 2 * (cellW + g), y: rowY, w: W - g - (g + 2 * (cellW + g)), h: rowH, photo: 3, tilt: 0 },
+        { x: g, y: g, w: W - 2 * g, h: heroH, photo: 0, tilt: 0 },
+        { x: x1, y: rowY, w: cellW, h: rowH, photo: 1, tilt: 0 },
+        { x: x2, y: rowY, w: cellW, h: rowH, photo: 2, tilt: 0 },
+        { x: x3, y: rowY, w: lastX(x3), h: rowH, photo: 3, tilt: 0 },
       ];
     }
     case 'grid4': {
       const cellW = Math.round((W - 2 * g - g) / 2);
       const cellH = Math.round((areaH - 2 * g - g) / 2);
+      const x2 = g + cellW + g;
+      const y2 = g + cellH + g;
       return [
         { x: g, y: g, w: cellW, h: cellH, photo: 0, tilt: 0 },
-        { x: g + cellW + g, y: g, w: W - g - (g + cellW + g), h: cellH, photo: 1, tilt: 0 },
-        { x: g, y: g + cellH + g, w: cellW, h: areaH - (g + cellH + g) - g, photo: 2, tilt: 0 },
-        { x: g + cellW + g, y: g + cellH + g, w: W - g - (g + cellW + g), h: areaH - (g + cellH + g) - g, photo: 3, tilt: 0 },
+        { x: x2, y: g, w: lastX(x2), h: cellH, photo: 1, tilt: 0 },
+        { x: g, y: y2, w: cellW, h: areaH - y2 - g, photo: 2, tilt: 0 },
+        { x: x2, y: y2, w: lastX(x2), h: areaH - y2 - g, photo: 3, tilt: 0 },
       ];
     }
     case 'grid9': {
@@ -65,7 +85,7 @@ export function layoutPanels(layout, W, H) {
           const y = g + r * (cellH + g);
           panels.push({
             x, y,
-            w: c === 2 ? W - g - x : cellW,
+            w: c === 2 ? lastX(x) : cellW,
             h: r === 2 ? areaH - g - y : cellH,
             photo: (r * 3 + c) % 4,
             tilt: 0,
@@ -86,40 +106,28 @@ export function layoutPanels(layout, W, H) {
   }
 }
 
-/** Seeded pseudo-random generator (mulberry32) so grain is identical on every render. */
-export function seededRandom(seed) {
-  let a = seed >>> 0;
-  return function next() {
-    a |= 0; a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-const gradeCache = new Map();
-
-/** Gradient-map grade lookup table for one grade id (256 entries of [r, g, b]). */
+/** 256-entry gradient-map lookup table for one grade: luminance -> [r, g, b]. */
 function gradeLut(grade) {
   const lut = [];
   for (let i = 0; i < 256; i++) {
     const t = i / 255;
-    let c;
     if (t < 0.5) {
       const k = t / 0.5;
-      c = grade.shadow.map((s, j) => s + (grade.mid[j] - s) * k);
+      lut.push(grade.shadow.map((s, j) => s + (grade.mid[j] - s) * k));
     } else {
       const k = (t - 0.5) / 0.5;
-      c = grade.mid.map((s, j) => s + (grade.high[j] - s) * k);
+      lut.push(grade.mid.map((s, j) => s + (grade.high[j] - s) * k));
     }
-    lut.push(c);
   }
   return lut;
 }
 
+const gradeCache = new Map();
+
 /**
  * The photo cover-fitted into a w x h bitmap with the grade applied.
- * Cached per photo, grade and size: pan/zoom reuse it, so dragging stays fast.
+ * Cached per photo, grade and size, so panning and zooming reuse it and the
+ * drag stays fast. The cache is capped and cleared rather than grown forever.
  */
 export function gradedPhoto(photo, gradeId, w, h) {
   const key = `${photo.img.src}|${gradeId}|${w}x${h}`;
@@ -134,6 +142,8 @@ export function gradedPhoto(photo, gradeId, w, h) {
   const scale = Math.max(w / img.naturalWidth, h / img.naturalHeight);
   const pw = img.naturalWidth * scale;
   const ph = img.naturalHeight * scale;
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
   ctx.drawImage(img, (w - pw) / 2, (h - ph) / 2, pw, ph);
   const lut = gradeLut(grade);
   const data = ctx.getImageData(0, 0, off.width, off.height);
@@ -142,9 +152,9 @@ export function gradedPhoto(photo, gradeId, w, h) {
   for (let i = 0; i < px.length; i += 4) {
     const lum = Math.round(0.2126 * px[i] + 0.7152 * px[i + 1] + 0.0722 * px[i + 2]);
     const g = lut[lum];
-    px[i] = px[i] + (g[0] - px[i]) * s;
-    px[i + 1] = px[i + 1] + (g[1] - px[i + 1]) * s;
-    px[i + 2] = px[i + 2] + (g[2] - px[i + 2]) * s;
+    px[i] += (g[0] - px[i]) * s;
+    px[i + 1] += (g[1] - px[i + 1]) * s;
+    px[i + 2] += (g[2] - px[i + 2]) * s;
   }
   ctx.putImageData(data, 0, 0);
   if (gradeCache.size > 24) gradeCache.clear();
@@ -152,22 +162,27 @@ export function gradedPhoto(photo, gradeId, w, h) {
   return off;
 }
 
-/** Draws one panel: the photo (panned/zoomed) with a white frame and a black keyline. */
-function drawPanel(ctx, panel, photo, gradeId, W) {
-  const { x, y, w, h } = panel;
-  ctx.save();
+/** Places the origin at a panel's top-left, applying its tilt when there is one. */
+function panelTransform(ctx, panel) {
   if (panel.tilt) {
-    ctx.translate(x + w / 2, y + h / 2);
+    ctx.translate(panel.x + panel.w / 2, panel.y + panel.h / 2);
     ctx.rotate(panel.tilt);
-    ctx.translate(-w / 2, -h / 2);
+    ctx.translate(-panel.w / 2, -panel.h / 2);
   } else {
-    ctx.translate(x, y);
+    ctx.translate(panel.x, panel.y);
   }
+}
+
+/** One panel: the photo (panned/zoomed) with a white frame and a black keyline. */
+function drawPanel(ctx, panel, photo, gradeId, W) {
+  const { w, h } = panel;
+  const frame = Math.max(3, Math.round(W * 0.006));
+  ctx.save();
+  panelTransform(ctx, panel);
   ctx.shadowColor = 'rgba(0,0,0,0.45)';
   ctx.shadowBlur = Math.max(6, W * 0.012);
   ctx.shadowOffsetY = Math.max(3, W * 0.004);
   ctx.fillStyle = '#ffffff';
-  const frame = Math.max(3, Math.round(W * 0.006));
   ctx.fillRect(-frame, -frame, w + 2 * frame, h + 2 * frame);
   ctx.shadowColor = 'transparent';
   ctx.shadowBlur = 0;
@@ -200,20 +215,14 @@ function drawPanel(ctx, panel, photo, gradeId, W) {
   }
   ctx.restore();
   ctx.save();
-  if (panel.tilt) {
-    ctx.translate(x + w / 2, y + h / 2);
-    ctx.rotate(panel.tilt);
-    ctx.translate(-w / 2, -h / 2);
-  } else {
-    ctx.translate(x, y);
-  }
+  panelTransform(ctx, panel);
   ctx.strokeStyle = 'rgba(0,0,0,0.85)';
   ctx.lineWidth = Math.max(1.5, W * 0.002);
   ctx.strokeRect(0, 0, w, h);
   ctx.restore();
 }
 
-/** Halftone dot strip across the top of the title band; deterministic by column. */
+/** Halftone dot strip across the top of the title band; dot size varies by column. */
 function drawHalftone(ctx, x, y, w, h, W) {
   const step = Math.max(7, W * 0.014);
   for (let i = 0; i * step < w; i++) {
@@ -227,6 +236,8 @@ function drawHalftone(ctx, x, y, w, h, W) {
 }
 
 let grainTile = null;
+
+/** A 128x128 noise tile from the seeded generator, reused as a repeat pattern. */
 function grainPattern(ctx) {
   if (grainTile) return grainTile;
   const tile = document.createElement('canvas');
@@ -247,11 +258,11 @@ function grainPattern(ctx) {
   return grainTile;
 }
 
-/** Fits the title to the width, shrinking Anton until it fits. */
+/** Shrinks the Anton title until it fits the width; returns the size used. */
 function fitTitleFont(ctx, text, maxWidth, startSize) {
   let size = startSize;
   ctx.font = `${size}px Anton, sans-serif`;
-  try { ctx.letterSpacing = '2px'; } catch { /* older canvas: no letter spacing */ }
+  try { ctx.letterSpacing = '2px'; } catch { /* older canvas has no letterSpacing */ }
   while (ctx.measureText(text).width > maxWidth && size > 12) {
     size -= 2;
     ctx.font = `${size}px Anton, sans-serif`;
@@ -272,8 +283,9 @@ export function drawCover(ctx, state, W, H) {
     const slot = state.onePhoto ? state.photos[0] : state.photos[panel.photo];
     drawPanel(ctx, panel, slot, state.grade, W);
   }
-  // Title band: halftone strip, neon subtitle, heat stars, then the title —
-  // stacked with room between them, so no line crowds the next.
+  // Title band: halftone strip at the top, then subtitle, stars and title each
+  // on their own line with room between them, so nothing crowds the next line.
+  // With the `full` layout there is no band: the words sit on a bottom scrim.
   const bandY = H - band;
   if (band > 0) {
     ctx.fillStyle = '#100b1a';
@@ -297,7 +309,7 @@ export function drawCover(ctx, state, W, H) {
   ctx.strokeText(title, W / 2, titleY);
   ctx.fillStyle = '#ffffff';
   ctx.fillText(title, W / 2, titleY);
-  // Neon script subtitle, tilted, on its own line above the stars.
+  // Neon script subtitle, slightly tilted, on its own line above the stars.
   const sub = (state.subtitle || '').trim();
   if (sub) {
     const subSize = Math.round(H * 0.032);
@@ -317,7 +329,7 @@ export function drawCover(ctx, state, W, H) {
     ctx.fillText(sub, 0, 0);
     ctx.restore();
   }
-  // Heat badge: five stars on their own line between subtitle and title.
+  // Heat badge: five gold stars on their own line between subtitle and title.
   if (state.showBadge) {
     const starSize = Math.round(H * 0.024);
     const starY = band > 0 ? bandY + band * 0.52 : H - H * 0.19;

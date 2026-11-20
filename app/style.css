@@ -91,6 +91,17 @@ body {
   font-weight: 400;
 }
 .hint { margin: 0; color: #b9aecb; font-size: 13px; }
+.kbd {
+  display: inline-block;
+  padding: 1px 6px;
+  border: 1px solid #6a5f8f;
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: #120e1e;
+  color: #fff;
+  font-size: 12px;
+  font-family: inherit;
+}
 label { display: flex; flex-direction: column; gap: 6px; font-weight: 600; font-size: 13px; }
 label.check { flex-direction: row; align-items: center; gap: 8px; font-weight: 400; }
 input[type=text] {

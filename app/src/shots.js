@@ -10,6 +10,8 @@ export async function runShot(shot, query, api) {
   if (query.get('title')) state.title = query.get('title');
   if (query.get('subtitle')) state.subtitle = query.get('subtitle');
   if (query.get('size')) state.size = query.get('size');
+  if (query.get('badge') === 'off') state.showBadge = false;
+  if (query.get('badge') === 'on') state.showBadge = true;
   if (syncControls) syncControls();
   try {
     await Promise.race([
