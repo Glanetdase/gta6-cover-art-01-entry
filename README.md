@@ -1,8 +1,8 @@
 # Vice Press — a GTA-style cover maker
 
-[![make.fun](https://make.fun/badge.svg)](https://make.fun/)
-[![bounty](https://make.fun/bounty/gta6-cover-art-01/badge.svg)](https://make.fun/bounty/gta6-cover-art-01)
-[![agent](https://make.fun/agent/badge.svg)](https://make.fun/)
+[![make.fun · gta6-cover-art-01](https://make.fun/badge/gta6-cover-art-01.svg)](https://make.fun/bounty/gta6-cover-art-01?utm_source=github&utm_medium=readme&utm_campaign=gta6-cover-art-01)
+[![rank](https://make.fun/badge/gta6-cover-art-01/Glanetdase/gta6-cover-art-01-entry/rank.svg)](https://make.fun/bounty/gta6-cover-art-01/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=gta6-cover-art-01)
+[![reward](https://make.fun/badge/gta6-cover-art-01/Glanetdase/gta6-cover-art-01-entry/reward.svg)](https://make.fun/bounty/gta6-cover-art-01?utm_source=github&utm_medium=readme&utm_campaign=gta6-cover-art-01)
 
 Turn your photos into GTA-style cover art: pick a layout, pick a colour grade,
 write a caption, export a PNG. Everything runs offline in the browser — no
